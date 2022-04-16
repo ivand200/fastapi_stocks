@@ -1,0 +1,14 @@
+fastapi[all]==0.75.0
+uvicorn[standard]==0.17.6
+SQLAlchemy==1.4.34
+pydantic==1.9.0
+yfinance==0.1.70
+pandas==1.4.2
+numpy==1.22.3
+requests==2.27.1
+black==22.3.0 
+PyJWT==1.7.1
+python-decouple==3.3
+alembic==1.7.7
+pytest==7.1.1 
+passlib==1.7.4
