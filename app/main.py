@@ -48,7 +48,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.INFO)
-handler_format = logging.Formatter("%(asctime)s-%(levelname)s-%(message)s")
+handler_format = logging.Formatter("%(asctime)s-%(message)s")
 handler.setFormatter(handler_format)
 logger.addHandler(handler)
 
@@ -116,6 +116,7 @@ async def create_user(user: schemas.UserInDB, db: Session = Depends(get_db)):
     Signup new user
     return token
     """
+    logger.info(f"User signup: {user.username}, {user.email}")
     username_check = (
         db.query(models.User)
         .filter(models.User.username == user.username)
@@ -150,6 +151,7 @@ async def user_login(user: schemas.UserInDB, db: Session = Depends(get_db)):
     User login
     return token
     """
+    logger.info(f"User login: {user.username}, {user.email}")
     if check_user(user, db):
         return signJWT(user.email)
     return HTTPException(status_code=403, detail="Unauthorized")
@@ -169,6 +171,7 @@ def user_delete(
     if not user_db.role == "admin":
         raise HTTPException(status_code=401, detail="Acces denied")
     else:
+        logger.info(f"User to delete: {user_id}, by {user_db.email}")
         user_db = db.query(models.User).filter(models.User.id == user_id).delete()
         db.commit()
         return f"User with id: {user_id} was deleted."
@@ -210,6 +213,7 @@ def get_stock(
             momentum_avg=db_stock.momentum_avg,
             div_p=db_stock.div_p,
         )
+        logger.info(f"Stock by ticker: {stock.name}, {stock.ticker}")
         return stock
 
 
@@ -228,6 +232,7 @@ def best_stocks(
         raise HTTPException(status_code=401, detail="Acces denied")
     else:      
         index_db = db.query(models.Index).filter(models.Index.ticker == index).first()
+        logger.info(f"best stocks from {index_db.ticker}")
         stocks_db = (
             db.query(models.Stock)
             .join(models.Index)
@@ -281,6 +286,7 @@ def update_index(
                 stock_to_update.momentum_avg = momentum_avg
                 stock_to_update.div_p = div_p
                 stock_to_update.name = name
+                logger.info(f"Update stock: {stock_to_update.ticker}")
                 db.commit()
                 db.refresh(stock_to_update)
 
@@ -302,6 +308,7 @@ def delete_index(
         raise HTTPException(status_code=401, detail="Acces denied")
     else:
         index_id = db.query(models.Index).filter(models.Index.ticker == index).first()
+        logger.info(f"Index to delete: {index_id.ticker}")
         index = db.query(models.Stock).filter(models.Stock.index_id == index_id.id).delete()
         db.commit()
         return JSONResponse(f"all stocks from index {index} was deleted")
@@ -336,6 +343,7 @@ def populate_index(
             name = row[1]
             stock = models.Stock(ticker=ticker, name=name, index_id=index_db.id)
             db.add(stock)
+            logger.info(f"Pupolate stock: {index_db.ticker}, {stock.ticker}")
         db.commit()
     return JSONResponse(f"{index} was populated")
 
@@ -344,6 +352,7 @@ def populate_index(
 def eft_update(db: Session = Depends(get_db)):
     """
     Update ETF
+    momentum_12_1
     """
     etfs = db.query(models.ETF).all()
     for item in etfs:
@@ -351,6 +360,7 @@ def eft_update(db: Session = Depends(get_db)):
         item.momentum_12_1 = momentum
         db.commit()
         db.refresh(item)
+        logger.info(f"ETF update {item.ticker}")
     return "ETFs was updated"
 
 
@@ -358,6 +368,7 @@ def eft_update(db: Session = Depends(get_db)):
 def etf_create(db: Session = Depends(get_db)):
     """
     Create ETF
+    Populate
     """
     with open(f"data/etf.csv", newline="") as f:
         file = csv.reader(f)
@@ -367,19 +378,38 @@ def etf_create(db: Session = Depends(get_db)):
             momentum = Momentum.get_momentum_12_1(row[0])
             etf = models.ETF(ticker=ticker, momentum_12_1=momentum)
             db.add(etf)
+            logger.info(f"Populate ETF: {etf.ticker}")
         db.commit()
     return JSONResponse("ETF was updated")
 
 
-@app.get("/test/123")
-def test_user(
+@app.delete("/etf/{etf}", status_code=200)
+def delete_etf(
+    etf: str,
     db: Session = Depends(get_db),
     Authorization: Optional[str] = Header(None)
 ):
     token = decodeJWT(Authorization)
-    check_user = db.query(models.User).filter(models.User.email == token["user_id"]).first()
-    if check_user.role == "admin":
-        return "test check"
+    user_db = db.query(models.User).filter(models.User.email == token["user_id"]).first()
+    if not user_db.role == "admin":
+        raise HTTPException(status_code=401, detail="Acces denied")
     else:
-        return HTTPException(status_code=401, detail="Acces denied")
+        etf_upper = etf.upper()
+        etf_db = db.query(models.ETF).filter(models.ETF.ticker == etf_upper).delete()
+        db.commit()
+        logger.info(f"ETF was deleted: {etf_upper}")
+        return f"{etf_upper} was deleted"
+
+
+# @app.get("/test/123")
+# def test_user(
+#     db: Session = Depends(get_db),
+#     Authorization: Optional[str] = Header(None)
+# ):
+#     token = decodeJWT(Authorization)
+#     check_user = db.query(models.User).filter(models.User.email == token["user_id"]).first()
+#     if check_user.role == "admin":
+#         return "test check"
+#     else:
+#         return HTTPException(status_code=401, detail="Acces denied")
 
