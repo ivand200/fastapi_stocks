@@ -1,5 +1,5 @@
 fastapi[all]==0.75.0
-uvicorn[standard]==0.17.6
+uvicorn[standard]==0.15.0
 SQLAlchemy==1.4.34
 pydantic==1.9.0
 yfinance==0.1.70
