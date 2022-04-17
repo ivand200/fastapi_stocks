@@ -392,11 +392,12 @@ def delete_etf(
         logger.info(f"ETF was deleted: {etf_upper}")
         return f"{etf_upper} was deleted"
 
-
+      
 @app.get("/redis/")
 def test_redis():
     result = r.get("MSFT")
     return json.loads(result)
+
 
 # @app.get("/test/123")
 # def test_user(
