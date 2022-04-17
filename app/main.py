@@ -43,6 +43,7 @@ from .defs import Momentum, DivP
 import csv
 import logging
 import sys
+import redis
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -68,7 +69,8 @@ def get_db():
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = config("secret")
 JWT_ALGORITH = config("algorithm")
-
+# r = redis.Redis(host="redis-18506.c299.asia-northeast1-1.gce.cloud.redislabs.com", port=18506, password="bsIwj0mAE3zODIm3irCJjn4KVAfWDfBp")
+r = redis.Redis(host=config("redis_host"), port=config("redis_port"), password=config("redis_password"))
 
 def token_response(token: str):
     return {"access_token": token}
@@ -268,29 +270,18 @@ def update_index(
         raise HTTPException(status_code=401, detail="Acces denied")
     else:
         index_db = db.query(models.Index).filter(models.Index.ticker == index).first()
-        with open(f"data/{index}.csv", newline="") as f:
-            file = csv.reader(f)
-            next(file)
-
-            for row in file:
-                stock_to_update = (
-                    db.query(models.Stock)
-                    .filter(
-                        models.Stock.ticker == row[0], models.Stock.index_id == index_db.id
-                    )
-                    .first()
-                )
-                momentum_avg = Momentum.get_momentum_avg(row[0])
-                div_p = DivP.get_div_p(row[0])
-                name = row[1]
-                stock_to_update.momentum_avg = momentum_avg
-                stock_to_update.div_p = div_p
-                stock_to_update.name = name
-                logger.info(f"Update stock: {stock_to_update.ticker}")
-                db.commit()
-                db.refresh(stock_to_update)
-
-    return JSONResponse({"status": "ok"})
+        stocks_db = db.query(models.Stock).filter(models.Stock.index_id == index_db.id).all()
+        for stock in stocks_db:
+            momentum_avg = Momentum.get_momentum_avg(stock.ticker)
+            div_p = DivP.get_div_p(stock.ticker)
+            stock.momentum_avg = momentum_avg
+            stock.div_p = div_p
+            logger.info(f"Update stock: {stock.ticker}")
+            redis_data = {"ticker": stock.ticker,"Momentum_avg": stock.momentum_avg, "Div_p": stock.div_p}
+            r.set(stock.ticker, json.dumps(redis_data))
+            db.commit()
+            db.refresh(stock)
+        return JSONResponse({"status": "ok"})
 
 
 @app.delete("/index/update/{index}", status_code=200)
@@ -360,6 +351,7 @@ def eft_update(db: Session = Depends(get_db)):
         item.momentum_12_1 = momentum
         db.commit()
         db.refresh(item)
+        r.set(item.ticker, item.momentum_12_1)
         logger.info(f"ETF update {item.ticker}")
     return "ETFs was updated"
 
@@ -399,6 +391,12 @@ def delete_etf(
         db.commit()
         logger.info(f"ETF was deleted: {etf_upper}")
         return f"{etf_upper} was deleted"
+
+      
+@app.get("/redis/")
+def test_redis():
+    result = r.get("MSFT")
+    return json.loads(result)
 
 
 # @app.get("/test/123")
