@@ -3,6 +3,7 @@ from celery.schedules import crontab
 import datetime
 import requests
 import json
+
 import worker.celery_settings
 
 app = Celery("tasks", broker=f"redis://:{worker.celery_settings.redis_password}@{worker.celery_settings.redis_host}:{worker.celery_settings.redis_port}")
