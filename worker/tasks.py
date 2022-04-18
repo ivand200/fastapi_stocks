@@ -9,7 +9,6 @@ import worker.celery_settings
 app = Celery("tasks", broker=f"redis://:{worker.celery_settings.redis_password}@{worker.celery_settings.redis_host}:{worker.celery_settings.redis_port}")
 
 
-
 @app.on_after_configure.connect
 def setup_period_tasks(sender, **kwargs):
     sender.add_period_task(
