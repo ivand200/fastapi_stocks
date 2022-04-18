@@ -1,8 +1,6 @@
-# TODO: implement Celery(priority--)
-# TODO: implement RabbitMQ
-# TODO: implement Docker
-# TODO: implement Redis(priority-)
-# TODO: implement logging
+# TODO: implement to use Redis to save users and especially admin(check for auth)
+# TODO: implement to use Celery to update etf, index (once a month)
+# TODO: revise paths
 # TODO: implement Admin model
 
 
