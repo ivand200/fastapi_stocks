@@ -71,6 +71,7 @@ app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = config("secret")
 JWT_ALGORITH = config("algorithm")
+
 r = redis.Redis(host=config("redis_host"), port=config("redis_port"), password=config("redis_password"))
 
 
@@ -393,6 +394,12 @@ def delete_etf(
         db.commit()
         logger.info(f"ETF was deleted: {etf_upper}")
         return f"{etf_upper} was deleted"
+
+      
+@app.get("/redis/")
+def test_redis():
+    result = r.get("MSFT")
+    return json.loads(result)
 
 
 # @app.get("/redis/")
