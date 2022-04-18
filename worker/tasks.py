@@ -4,7 +4,10 @@ import datetime
 import requests
 import json
 
-app = Celery("tasks", broker="redis://:bsIwj0mAE3zODIm3irCJjn4KVAfWDfBp@redis-18506.c299.asia-northeast1-1.gce.cloud.redislabs.com:18506")
+import worker.celery_settings
+
+app = Celery("tasks", broker=f"redis://:{worker.celery_settings.redis_password}@{worker.celery_settings.redis_host}:{worker.celery_settings.redis_port}")
+
 
 
 @app.on_after_configure.connect
