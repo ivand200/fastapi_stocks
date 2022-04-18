@@ -71,9 +71,6 @@ app = FastAPI()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = config("secret")
 JWT_ALGORITH = config("algorithm")
-r = redis.Redis(host=config("redis_host"), port=config("redis_port"), password=config("redis_password"))
-
-r = redis.Redis(host=config("redis_host"), port=config("redis_port"), password=config("redis_password"))
 
 r = redis.Redis(host=config("redis_host"), port=config("redis_port"), password=config("redis_password"))
 
@@ -423,4 +420,5 @@ def test_redis():
 #         f.write("test log: ")
 #         print("Check")
 #     return {"status": 2}
+
 
