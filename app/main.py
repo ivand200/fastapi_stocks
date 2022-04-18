@@ -26,6 +26,7 @@ from fastapi import (
     Security, Header, Response
 )
 
+from worker import tasks
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
 from fastapi.security import (
@@ -39,6 +40,7 @@ from passlib.context import CryptContext
 from database import models, schemas
 from database.db import SessionLocal, engine
 from .defs import Momentum, DivP
+from database.db import get_db
 
 import csv
 import logging
@@ -57,20 +59,21 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# # Dependency
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = config("secret")
 JWT_ALGORITH = config("algorithm")
-# r = redis.Redis(host="redis-18506.c299.asia-northeast1-1.gce.cloud.redislabs.com", port=18506, password="bsIwj0mAE3zODIm3irCJjn4KVAfWDfBp")
+
 r = redis.Redis(host=config("redis_host"), port=config("redis_port"), password=config("redis_password"))
+
 
 def token_response(token: str):
     return {"access_token": token}
@@ -256,7 +259,7 @@ def best_stocks(
 
 
 @app.put("/index/update/{index}", status_code=200)
-def update_index(
+async def update_index(
     index: str, 
     db: Session = Depends(get_db), 
     Authorization: Optional[str] = Header(None)
@@ -314,7 +317,7 @@ def delete_index(
 
 
 @app.post("/index/update/{index}", status_code=201)
-def populate_index(
+async def populate_index(
     index: str,
     db: Session = Depends(get_db),
     Authorization: Optional[str] = Header(None)
@@ -340,7 +343,7 @@ def populate_index(
 
 
 @app.put("/etf/update", status_code=204)
-def eft_update(db: Session = Depends(get_db)):
+async def eft_update(db: Session = Depends(get_db)):
     """
     Update ETF
     momentum_12_1
@@ -357,7 +360,7 @@ def eft_update(db: Session = Depends(get_db)):
 
 
 @app.post("/etf/update", status_code=201)
-def etf_create(db: Session = Depends(get_db)):
+async def etf_create(db: Session = Depends(get_db)):
     """
     Create ETF
     Populate
@@ -399,15 +402,23 @@ def test_redis():
     return json.loads(result)
 
 
-# @app.get("/test/123")
-# def test_user(
-#     db: Session = Depends(get_db),
-#     Authorization: Optional[str] = Header(None)
-# ):
-#     token = decodeJWT(Authorization)
-#     check_user = db.query(models.User).filter(models.User.email == token["user_id"]).first()
-#     if check_user.role == "admin":
-#         return "test check"
-#     else:
-#         return HTTPException(status_code=401, detail="Acces denied")
+# @app.get("/redis/")
+# def test_redis():
+#     result = r.get("MSFT")
+#     return json.loads(result)
+# 
+# 
+# @app.get("/celery")
+# def test_celery():
+#     result = tasks.dj30_update()
+#     return {"status": "ok"}
+# 
+# 
+# @app.post("/celery/2")
+# def test_celery_2():
+#     with open("log.txt", "w") as f:
+#         f.write("test log: ")
+#         print("Check")
+#     return {"status": 2}
+
 
