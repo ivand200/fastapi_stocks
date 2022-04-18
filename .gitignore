@@ -5,3 +5,6 @@ __pycache__
 # Database
 sql_app.db
 sql_app.db.sqbpro
+
+# Env
+app/.env
