@@ -92,3 +92,8 @@ class DivP:
             # result = check_nan(div_p)
             # print(div_p)
             return round(div_p, 2)
+
+
+# class Ma10:
+#     @staticmethod
+#     def get_ma_10(ticker):

@@ -27,11 +27,12 @@ def test_get_token():
     response_ticker_token = client.get("/stocks/AAPL", headers={"Authorization": TOKEN})
     response_ticker_bad_token = client.get("/stocks/AAPL", headers={"Authorization": "123fttt"})
 
-    response_index_token = client.get("/index/best/dj30", headers={"Authorization": TOKEN})
-    response_index_bad_token = client.get("/index/best/dj30")
+    response_index_token = client.get("/index/dj30", headers={"Authorization": TOKEN})
+    response_index_bad_token = client.get("/index/dj30")
 
     assert response.status_code == 200
     assert response_ticker_token.status_code == 200
+    assert response_ticker_token.json()["ticker"] == "AAPL"
     assert response_ticker_bad_token.status_code == 401
     assert response_index_token.status_code == 200
     assert response_index_bad_token.status_code == 401
