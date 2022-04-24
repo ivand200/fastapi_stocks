@@ -69,6 +69,7 @@ r = redis.Redis(
 
 scheduler = BackgroundScheduler()
 
+
 def token_response(token: str):
     return {"access_token": token}
 
@@ -281,6 +282,7 @@ async def update_index(
             stock.momentum_avg = momentum_avg
             stock.div_p = div_p
             logger.info(f"Update stock: {stock.ticker}")
+
             redis_data = {
                 "ticker": stock.ticker,
                 "Momentum_avg": stock.momentum_avg,
@@ -291,7 +293,7 @@ async def update_index(
             db.refresh(stock)
         return JSONResponse({"status": "ok"})
 
-
+      
 @app.delete("/index/{index}", status_code=200)
 def delete_index(
     index: str,
@@ -346,7 +348,7 @@ async def populate_index(
         db.commit()
     return JSONResponse(f"{index} was populated")
 
-
+ 
 @app.put("/etf/", status_code=204)
 async def eft_update(db: Session = Depends(get_db)):
     """
@@ -362,6 +364,7 @@ async def eft_update(db: Session = Depends(get_db)):
         r.set(item.ticker, item.momentum_12_1)
         logger.info(f"ETF update {item.ticker}")
     return "ETFs was updated"
+
 
 
 @app.post("/etf/", status_code=201)
@@ -403,7 +406,6 @@ def delete_etf(
         logger.info(f"ETF was deleted: {etf_upper}")
         return f"{etf_upper} was deleted"
 
-
 @app.get("/redis/")
 def test_redis():
     result = r.get("MSFT")
@@ -418,7 +420,6 @@ def test_repeat():
 
 # if __name__ == "__main__":
 #     uvicorn.run(app="app.main:app", host="0.0.0.0", port=80)
-
 
 # @app.get("/redis/")
 # def test_redis():
