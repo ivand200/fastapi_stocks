@@ -25,7 +25,6 @@ def repeat():
     r = requests.post("http://127.0.0.1:8000/repeat")
     print(r.text)
 
-
 @app.task
 def dj30_update():
     payload = {
