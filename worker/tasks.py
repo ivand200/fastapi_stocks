@@ -10,11 +10,21 @@ app = Celery("tasks", broker=f"redis://:{worker.celery_settings.redis_password}@
 
 
 @app.on_after_configure.connect
-def setup_period_tasks(sender, **kwargs):
-    sender.add_period_task(
+def setup_periodic_tasks(sender, **kwargs):
+    sender.add_periodic_task(
         crontab(day_of_month=5),
         dj30_update.s(),
     )
+    sender.add_periodic_task(
+        10.0, repeat.s()
+    )
+
+
+@app.task
+def repeat():
+    r = requests.post("http://127.0.0.1:8000/repeat")
+    print(r.text)
+
 
 @app.task
 def dj30_update():

@@ -2,7 +2,10 @@
 # TODO: implement to use Celery to update etf, index (once a month)
 # TODO: revise paths
 # TODO: implement Admin model
-
+import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+import requests
+import uvicorn
 
 from base64 import decode
 from statistics import mode
@@ -19,10 +22,7 @@ from decouple import config
 
 
 from starlette import status
-from fastapi import (
-    FastAPI, Depends, HTTPException, 
-    Security, Header, Response
-)
+from fastapi import FastAPI, Depends, HTTPException, Security, Header, Response
 
 from worker import tasks
 from sqlalchemy.orm import Session
@@ -31,7 +31,7 @@ from fastapi.security import (
     OAuth2PasswordBearer, 
     OAuth2PasswordRequestForm, 
     HTTPAuthorizationCredentials, 
-    HTTPBearer
+    HTTPBearer,
 )
 from passlib.context import CryptContext
 
@@ -45,6 +45,7 @@ import logging
 import sys
 import redis
 
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
@@ -57,27 +58,23 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# # Dependency
-# def get_db():
-#     db = SessionLocal()
-#     try:
-#         yield db
-#     finally:
-#         db.close()
-
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = config("secret")
 JWT_ALGORITH = config("algorithm")
-r = redis.Redis(host=config("redis_host"), port=config("redis_port"), password=config("redis_password"))
+r = redis.Redis(
+    host=config("redis_host"),
+    port=config("redis_port"),
+    password=config("redis_password")
+)
 
+scheduler = BackgroundScheduler()
 
 def token_response(token: str):
     return {"access_token": token}
 
 
 def signJWT(user_id: str):
-    payload = { "user_id": user_id, "expires": time.time() + 600}
+    payload = {"user_id": user_id, "expires": time.time() + 600}
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITH)
     return token_response(token)
 
@@ -97,8 +94,8 @@ def check_user(user: schemas.UserInDB, db: Session = Depends(get_db)):
     """
     try:
         user_db = (
-            db.query(models.User).
-            filter(
+            db.query(models.User)
+            .filter(
                 models.User.email == user.email, models.User.username == user.username
             )
             .first()
@@ -163,13 +160,15 @@ async def user_login(user: schemas.UserInDB, db: Session = Depends(get_db)):
 def user_delete(
     user_id: int,
     db: Session = Depends(get_db),
-    Authorization: Optional[str] = Header(None)
+    Authorization: Optional[str] = Header(None),
 ):
     """
     Delete user by id
     """
     token = decodeJWT(Authorization)
-    user_db = db.query(models.User).filter(models.User.email == token["user_id"]).first()
+    user_db = (
+        db.query(models.User).filter(models.User.email == token["user_id"]).first()
+    )
     if not user_db.role == "admin":
         raise HTTPException(status_code=401, detail="Acces denied")
     else:
@@ -219,12 +218,12 @@ def get_stock(
         return stock
 
 
-@app.get("/index/best/{index}", response_model=schemas.IndexDataBase, status_code=200)
+@app.get("/index/{index}", response_model=schemas.IndexDataBase, status_code=200)
 def best_stocks(
     index: str,
     response_model = schemas.IndexDataBase,
     db: Session = Depends(get_db),
-    Authorization: Optional[str] = Header(None)
+    Authorization: Optional[str] = Header(None),
 ):
     """
     Get information about best stocks from index
@@ -232,14 +231,15 @@ def best_stocks(
     """
     if not decodeJWT(Authorization):
         raise HTTPException(status_code=401, detail="Acces denied")
-    else:      
+    else:  
         index_db = db.query(models.Index).filter(models.Index.ticker == index).first()
         logger.info(f"best stocks from {index_db.ticker}")
         stocks_db = (
             db.query(models.Stock)
             .join(models.Index)
             .filter(models.Index.ticker == index)
-            .order_by(models.Stock.momentum_avg.desc()).all()
+            .order_by(models.Stock.momentum_avg.desc())
+            .all()
             )
         result = schemas.IndexDataBase(ticker=index_db.ticker, stocks=stocks_db)
         return result
@@ -255,11 +255,11 @@ def best_stocks(
     # return stock_serializer
 
 
-@app.put("/index/update/{index}", status_code=200)
+@app.put("/index/{index}", status_code=200)
 async def update_index(
     index: str, 
     db: Session = Depends(get_db), 
-    Authorization: Optional[str] = Header(None)
+    Authorization: Optional[str] = Header(None),
 ):
     """
     Update stocks by index
@@ -269,22 +269,30 @@ async def update_index(
     if not decodeJWT(Authorization):
         raise HTTPException(status_code=401, detail="Acces denied")
     else:
-        index_db = db.query(models.Index).filter(models.Index.ticker == index).first()
-        stocks_db = db.query(models.Stock).filter(models.Stock.index_id == index_db.id).all()
+        index_db = (
+            db.query(models.Index).filter(models.Index.ticker == index).first()
+        )
+        stocks_db = (
+            db.query(models.Stock).filter(models.Stock.index_id == index_db.id).all()
+        )
         for stock in stocks_db:
             momentum_avg = Momentum.get_momentum_avg(stock.ticker)
             div_p = DivP.get_div_p(stock.ticker)
             stock.momentum_avg = momentum_avg
             stock.div_p = div_p
             logger.info(f"Update stock: {stock.ticker}")
-            redis_data = {"ticker": stock.ticker,"Momentum_avg": stock.momentum_avg, "Div_p": stock.div_p}
+            redis_data = {
+                "ticker": stock.ticker,
+                "Momentum_avg": stock.momentum_avg,
+                "Div_p": stock.div_p
+            }
             r.set(stock.ticker, json.dumps(redis_data))
             db.commit()
             db.refresh(stock)
         return JSONResponse({"status": "ok"})
 
 
-@app.delete("/index/update/{index}", status_code=200)
+@app.delete("/index/{index}", status_code=200)
 def delete_index(
     index: str,
     db: Session = Depends(get_db),
@@ -313,11 +321,11 @@ def delete_index(
     #     return JSONResponse(f"all stocks from index {index} was deleted")
 
 
-@app.post("/index/update/{index}", status_code=201)
+@app.post("/index/{index}", status_code=201)
 async def populate_index(
     index: str,
     db: Session = Depends(get_db),
-    Authorization: Optional[str] = Header(None)
+    Authorization: Optional[str] = Header(None),
 ):
     """
     Populate stocks by
@@ -339,7 +347,7 @@ async def populate_index(
     return JSONResponse(f"{index} was populated")
 
 
-@app.put("/etf/update", status_code=204)
+@app.put("/etf/", status_code=204)
 async def eft_update(db: Session = Depends(get_db)):
     """
     Update ETF
@@ -356,7 +364,7 @@ async def eft_update(db: Session = Depends(get_db)):
     return "ETFs was updated"
 
 
-@app.post("/etf/update", status_code=201)
+@app.post("/etf/", status_code=201)
 async def etf_create(db: Session = Depends(get_db)):
     """
     Create ETF
@@ -381,6 +389,9 @@ def delete_etf(
     db: Session = Depends(get_db),
     Authorization: Optional[str] = Header(None)
 ):
+    """
+    Delete ETF by ticker
+    """
     token = decodeJWT(Authorization)
     user_db = db.query(models.User).filter(models.User.email == token["user_id"]).first()
     if not user_db.role == "admin":
@@ -392,11 +403,21 @@ def delete_etf(
         logger.info(f"ETF was deleted: {etf_upper}")
         return f"{etf_upper} was deleted"
 
-      
+
 @app.get("/redis/")
 def test_redis():
     result = r.get("MSFT")
     return json.loads(result)
+
+
+@app.post("/repeat")
+def test_repeat():
+    sec = datetime.datetime.now()
+    logger.info(f"test celery: {sec}")
+    return {"seconds": f"{sec.second}"}
+
+# if __name__ == "__main__":
+#     uvicorn.run(app="app.main:app", host="0.0.0.0", port=80)
 
 
 # @app.get("/redis/")
