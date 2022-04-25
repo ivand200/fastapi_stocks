@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import requests
 import urllib.request, urllib.parse, urllib.error
 
-
+# TODO: Run on 2nd day of the month
 now = datetime.now()
 last_month = (now - timedelta(weeks=4)).replace(day=30)
 last_month_timestamp = datetime.timestamp(last_month)
@@ -15,18 +15,9 @@ month_year_ago = last_month - timedelta(weeks=52)
 month_year_ago_timestamp = datetime.timestamp(month_year_ago)
 
 
-def check_nan(num):
-    if math.isnan(num):
-    #if num is None:
-        num = 0.0
-        return num
-    else:
-        return num
-
-
 class Momentum:
     @staticmethod
-    def get_momentum_avg(ticker):
+    def get_momentum_avg(ticker: str) -> float:
         """
         Average momentum for last 3,6,12 months:
         a) price_1: end of last month price
@@ -53,7 +44,7 @@ class Momentum:
             return round(result, 2)
 
     @staticmethod
-    def get_momentum_12_1(ticker):
+    def get_momentum_12_1(ticker: str) -> float:
         """
         Get momentum:
         close price for end of last month / close price twelve month ago
@@ -68,13 +59,12 @@ class Momentum:
         except:
             momentum = 0.0
         finally:
-            # check_nan(momentum)
             return round(momentum, 3)
 
 
 class DivP:
     @staticmethod
-    def get_div_p(ticker):
+    def get_div_p(ticker: str) -> float:
         """
         Average dividends for last 4 years / last close price
         Yahoo finance yfinance
@@ -89,8 +79,6 @@ class DivP:
         except:
             div_p = 0.0
         finally:
-            # result = check_nan(div_p)
-            # print(div_p)
             return round(div_p, 2)
 
 
