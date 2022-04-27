@@ -14,7 +14,19 @@ client = TestClient(main.app)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def test_get_token():
+def get_admin_token():
+    payload = {
+        "username": "test_admin",
+        "email": "admin@domain.com",
+        "password": "testPass"
+    }
+    response = client.post("/auth/user/login", data=json.dumps(payload))
+    response_body = response.json()
+    TOKEN = response_body["access_token"]
+    return TOKEN
+
+
+def get_token():
     payload = {
         "username": "test_user1",
         "email": "test@mail.com1",
@@ -23,25 +35,14 @@ def test_get_token():
     response = client.post("/auth/user/login", data=json.dumps(payload))
     response_body = response.json()
     TOKEN = response_body["access_token"]
-
-    response_ticker_token = client.get("/stocks/AAPL", headers={"Authorization": TOKEN})
-    response_ticker_bad_token = client.get("/stocks/AAPL", headers={"Authorization": "123fttt"})
-
-    response_index_token = client.get("/index/dj30", headers={"Authorization": TOKEN})
-    response_index_bad_token = client.get("/index/dj30")
-
-    assert response.status_code == 200
-    assert response_ticker_token.status_code == 200
-    assert response_ticker_token.json()["ticker"] == "AAPL"
-    assert response_ticker_bad_token.status_code == 401
-    assert response_index_token.status_code == 200
-    assert response_index_bad_token.status_code == 401
     
+    return TOKEN
 
-def test_create_delete_user():
+
+def test_auth_app():
     payload = {
-        "username": "test_admin",
-        "email": "admin@domain.com",
+        "username": "test_user1",
+        "email": "test@mail.com1",
         "password": "testPass"
     }
 
@@ -52,20 +53,64 @@ def test_create_delete_user():
         "password": "pytestPass"
     }
 
-
+    unregistered_user = {
+        "username": "blabla_pytest",
+        "email": "nouser@mail.com",
+        "password": "pytestPass"
+    }
 
     response = client.post("/auth/user/login", data=json.dumps(payload))
     response_body = response.json()
-    TOKEN = response_body["access_token"]
+    TOKEN = get_admin_token()
 
-    response_create_user = client.post("auth/user/signup", data=json.dumps(user_test))
-    # response_delete_fake_admin = client.delete(f"user/{user_test['id']}", headers={"Authorization": "Asvf$5geGe5V"})
-    response_delete_user = client.delete(f"auth/user/{user_test['id']}", headers={"Authorization": TOKEN})
+
+    response_create_user = client.post("/auth/user/signup", data=json.dumps(user_test))
+    response_login_user = client.post("/auth/user/login", data=json.dumps(user_test))
+    response_login_unregistered_user = client.post("/auth/user/login", data=json.dumps(unregistered_user))
+    response_delete_fake_admin = client.delete(f"/auth/user/{user_test['id']}", headers={"Authorization": "Asvf$5geGe5V"})
+    response_delete_user = client.delete(f"/auth/user/{user_test['id']}", headers={"Authorization": TOKEN})
 
     assert response.status_code == 200
     assert response_create_user.status_code == 201
-    # assert response_delete_fake_admin == 401
+    assert response_login_user.status_code == 200
+    assert response_login_unregistered_user.status_code == 403
+    assert response_delete_fake_admin.status_code == 401
     assert response_delete_user.status_code == 200
+
+
+def test_get_token():
+    TOKEN = get_token()
+    
+    response_ticker_token = client.get("/stocks/AAPL", headers={"Authorization": TOKEN})
+    response_ticker_bad_token = client.get("/stocks/AAPL", headers={"Authorization": "123fttt"})
+
+    response_index_token = client.get("/index/dj30", headers={"Authorization": TOKEN})
+    response_index_bad_token = client.get("/index/dj30")
+
+    assert response_ticker_token.status_code == 200
+    assert response_ticker_token.json()["ticker"] == "AAPL"
+    assert response_ticker_bad_token.status_code == 401
+    assert response_index_token.status_code == 200
+    assert response_index_bad_token.status_code == 401
+
+
+test_data_etf = [
+    ("spy", "SPY"),
+    ("dji", "DJI")
+]
+@pytest.mark.parametrize("ticker_lower, ticker_upper", test_data_etf)
+def test_etf_app(ticker_lower, ticker_upper):
+    TOKEN = get_token()
+
+    response_get_etf_ticker = client.get(f"/etf/{ticker_lower}", headers={"Authorization": TOKEN})
+    response_body = response_get_etf_ticker.json()
+
+    response_etf_del = client.delete(f"/etf/spy", headers={"Authorization": "wefrgERG67"})
+
+    assert response_get_etf_ticker.status_code == 200
+    assert response_body["ticker"] == ticker_upper
+    assert response_etf_del.status_code == 401
+
 
 
 

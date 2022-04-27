@@ -4,8 +4,6 @@
 # TODO: implement Admin model
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
-import requests
-import uvicorn
 
 from base64 import decode
 from statistics import mode
@@ -20,9 +18,7 @@ from typing import Dict, Optional
 import jwt
 from decouple import config
 
-
 from starlette import status
-from fastapi import FastAPI, Depends, HTTPException, Security, Header, Response
 
 from worker import tasks
 from sqlalchemy.orm import Session
@@ -36,14 +32,17 @@ from fastapi.security import (
 from passlib.context import CryptContext
 
 from database import models, schemas
-from database.db import SessionLocal, engine
 from .defs import Momentum, DivP
-from database.db import get_db
+from database.db import get_db, engine
+from app.routers import app
+from fastapi import Depends, HTTPException, Security, Header, Response
+from app.auth import decodeJWT
 
 import csv
 import logging
 import sys
 import redis
+
 
 
 logger = logging.getLogger()
@@ -56,8 +55,6 @@ logger.addHandler(handler)
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 JWT_SECRET = config("secret")
 JWT_ALGORITH = config("algorithm")
@@ -68,128 +65,6 @@ r = redis.Redis(
 )
 
 scheduler = BackgroundScheduler()
-
-
-def token_response(token: str):
-    return {"access_token": token}
-
-
-def signJWT(user_id: str):
-    payload = {"user_id": user_id, "expires": time.time() + 600}
-    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITH)
-    return token_response(token)
-
-
-def decodeJWT(token: str):
-    try:
-        decoded_token = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITH])
-        return decoded_token if decoded_token["expires"] >= time.time() else False
-    except:
-        return False
-
-
-def check_user(user: schemas.UserInDB, db: Session = Depends(get_db)):
-    """
-    Check user in DB
-    username and email
-    """
-    try:
-        user_db = (
-            db.query(models.User)
-            .filter(
-                models.User.email == user.email, models.User.username == user.username
-            )
-            .first()
-        )
-        varify_password = pwd_context.verify(user.password, user_db.password)
-        # user_db = db.query(models.User).filter(models.User.email == user.email, models.User.username == user.username).first()
-        if user_db and varify_password:
-            return True
-        return False
-    except:
-        return False
-
-
-@app.post("/user/signup", status_code=201)
-async def create_user(user: schemas.UserInDB, db: Session = Depends(get_db)):
-    """
-    Signup new user
-    return token
-    """
-    logger.info(f"User signup: {user.username}, {user.email}")
-    username_check = (
-        db.query(models.User)
-        .filter(models.User.username == user.username)
-        .first()
-    )
-    email_check = (
-        db.query(models.User)
-        .filter(models.User.email == user.email)
-        .first()
-    )
-    if username_check or email_check:
-        raise HTTPException(
-            status_code=400, detail="username or mail already exist"
-        )
-    hashed_password = pwd_context.hash(user.password)
-    user_db = models.User(
-        username=user.username, email=user.email, password=hashed_password
-    )
-    if user.role:
-        user_db.role = user.role
-    if user.id:
-        user_db.id = user.id
-    db.add(user_db)
-    db.commit()
-    db.refresh(user_db)
-    return signJWT(user.email)
-
-
-@app.post("/user/login", status_code=200)
-async def user_login(user: schemas.UserInDB, db: Session = Depends(get_db)):
-    """
-    User login
-    return token
-    """
-    logger.info(f"User login: {user.username}, {user.email}")
-    if check_user(user, db):
-        return signJWT(user.email)
-    return HTTPException(status_code=403, detail="Unauthorized")
-
-
-@app.delete("/user/{user_id}", status_code=200)
-def user_delete(
-    user_id: int,
-    db: Session = Depends(get_db),
-    Authorization: Optional[str] = Header(None),
-):
-    """
-    Delete user by id
-    """
-    token = decodeJWT(Authorization)
-    user_db = (
-        db.query(models.User).filter(models.User.email == token["user_id"]).first()
-    )
-    if not user_db.role == "admin":
-        raise HTTPException(status_code=401, detail="Acces denied")
-    else:
-        logger.info(f"User to delete: {user_id}, by {user_db.email}")
-        user_db = db.query(models.User).filter(models.User.id == user_id).delete()
-        db.commit()
-        return f"User with id: {user_id} was deleted."
-
-
-# @app.get("/{index}", response_model = schemas.IndexDataBase)
-# async def root(index: str, db: Session = Depends(get_db)):
-#     query = (
-#         db.query(models.Stock)
-#         .join(models.Index)
-#         .filter(models.Index.ticker == index)
-#         .all()
-#     )
-#     result = schemas.IndexDataBase(ticker=index)
-#     result.stocks = query
-#     return result
 
 
 @app.get("/stocks/{ticker}", response_model=schemas.StockBase, status_code=200)
@@ -348,75 +223,19 @@ async def populate_index(
         db.commit()
     return JSONResponse(f"{index} was populated")
 
- 
-@app.put("/etf/", status_code=204)
-async def eft_update(db: Session = Depends(get_db)):
-    """
-    Update ETF
-    momentum_12_1
-    """
-    etfs = db.query(models.ETF).all()
-    for item in etfs:
-        momentum = Momentum.get_momentum_12_1(item.ticker)
-        item.momentum_12_1 = momentum
-        db.commit()
-        db.refresh(item)
-        r.set(item.ticker, item.momentum_12_1)
-        logger.info(f"ETF update {item.ticker}")
-    return "ETFs was updated"
 
-
-
-@app.post("/etf/", status_code=201)
-async def etf_create(db: Session = Depends(get_db)):
-    """
-    Create ETF
-    Populate
-    """
-    with open(f"data/etf.csv", newline="") as f:
-        file = csv.reader(f)
-        next(file)
-        for row in file:
-            ticker = row[0]
-            momentum = Momentum.get_momentum_12_1(row[0])
-            etf = models.ETF(ticker=ticker, momentum_12_1=momentum)
-            db.add(etf)
-            logger.info(f"Populate ETF: {etf.ticker}")
-        db.commit()
-    return JSONResponse("ETF was updated")
-
-
-@app.delete("/etf/{etf}", status_code=200)
-def delete_etf(
-    etf: str,
-    db: Session = Depends(get_db),
-    Authorization: Optional[str] = Header(None)
-):
-    """
-    Delete ETF by ticker
-    """
-    token = decodeJWT(Authorization)
-    user_db = db.query(models.User).filter(models.User.email == token["user_id"]).first()
-    if not user_db.role == "admin":
-        raise HTTPException(status_code=401, detail="Acces denied")
-    else:
-        etf_upper = etf.upper()
-        etf_db = db.query(models.ETF).filter(models.ETF.ticker == etf_upper).delete()
-        db.commit()
-        logger.info(f"ETF was deleted: {etf_upper}")
-        return f"{etf_upper} was deleted"
-
-@app.get("/redis/")
-def test_redis():
-    result = r.get("MSFT")
-    return json.loads(result)
-
-
-@app.post("/repeat")
-def test_repeat():
-    sec = datetime.datetime.now()
-    logger.info(f"test celery: {sec}")
-    return {"seconds": f"{sec.second}"}
+# 
+# @app.get("/redis/")
+# def test_redis():
+#     result = r.get("MSFT")
+#     return json.loads(result)
+# 
+# 
+# @app.post("/repeat")
+# def test_repeat():
+#     sec = datetime.datetime.now()
+#     logger.info(f"test celery: {sec}")
+#     return {"seconds": f"{sec.second}"}
 
 # if __name__ == "__main__":
 #     uvicorn.run(app="app.main:app", host="0.0.0.0", port=80)
