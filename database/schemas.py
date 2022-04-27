@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class TokenBase(BaseModel):
     token: str
 
+
 class UserBase(BaseModel):
     id: Optional[int]
     username: str
@@ -18,7 +19,6 @@ class UserBase(BaseModel):
 class UserInDB(UserBase):
     password: str
     
-
 
 class StockBase(BaseModel):
     name: str
@@ -42,8 +42,6 @@ class IndexDataBase(IndexBase):
 
     class Config:
         orm_mode = True
-
-
 
 
 class ETFBase(BaseModel):

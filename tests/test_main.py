@@ -20,7 +20,7 @@ def test_get_token():
         "email": "test@mail.com1",
         "password": "testPass"
     }
-    response = client.post("/user/login", data=json.dumps(payload))
+    response = client.post("/auth/user/login", data=json.dumps(payload))
     response_body = response.json()
     TOKEN = response_body["access_token"]
 
@@ -54,13 +54,13 @@ def test_create_delete_user():
 
 
 
-    response = client.post("/user/login", data=json.dumps(payload))
+    response = client.post("/auth/user/login", data=json.dumps(payload))
     response_body = response.json()
     TOKEN = response_body["access_token"]
 
-    response_create_user = client.post("/user/signup", data=json.dumps(user_test))
+    response_create_user = client.post("auth/user/signup", data=json.dumps(user_test))
     # response_delete_fake_admin = client.delete(f"user/{user_test['id']}", headers={"Authorization": "Asvf$5geGe5V"})
-    response_delete_user = client.delete(f"/user/{user_test['id']}", headers={"Authorization": TOKEN})
+    response_delete_user = client.delete(f"auth/user/{user_test['id']}", headers={"Authorization": TOKEN})
 
     assert response.status_code == 200
     assert response_create_user.status_code == 201
@@ -93,7 +93,7 @@ def test_create_old_user():
         "email": "test@mail.com1",
         "password": "testPass"
     }
-    response = client.post("user/signup", data=json.dumps(payload))
+    response = client.post("/auth/user/signup", data=json.dumps(payload))
     assert response.status_code == 400
 
 
