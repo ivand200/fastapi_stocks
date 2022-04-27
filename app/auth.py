@@ -99,7 +99,7 @@ async def user_login(user: schemas.UserInDB, db: Session = Depends(get_db)):
     # logger.info(f"User login: {user.username}, {user.email}")
     if check_user(user, db):
         return signJWT(user.email)
-    return HTTPException(status_code=403, detail="Unauthorized")
+    raise HTTPException(status_code=403, detail="Unauthorized")
 
 
 @router_auth.delete("/user/{user_id}", status_code=200)
@@ -112,6 +112,8 @@ def user_delete(
     Delete user by id
     """
     token = decodeJWT(Authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Acces denied")
     user_db = (
         db.query(models.User).filter(models.User.email == token["user_id"]).first()
     )
