@@ -63,6 +63,7 @@ def test_auth_app():
     response_body = response.json()
     TOKEN = get_admin_token()
 
+
     response_create_user = client.post("/auth/user/signup", data=json.dumps(user_test))
     response_login_user = client.post("/auth/user/login", data=json.dumps(user_test))
     response_login_unregistered_user = client.post("/auth/user/login", data=json.dumps(unregistered_user))

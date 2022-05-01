@@ -11,11 +11,11 @@ app.include_router(
     prefix="/etf",
     tags=["etf"]
 )
-
 app.include_router(
     router_auth,
     prefix="/auth",
     tags=["auth"]
+
 )
 
 app.include_router(

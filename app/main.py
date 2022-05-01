@@ -30,6 +30,7 @@ from passlib.context import CryptContext
 from database import models, schemas
 from .defs import Momentum, DivP
 from database.db import get_db, engine
+
 # from app.routers import app
 from fastapi import APIRouter, Depends, HTTPException, Security, Header, Response
 from app.auth import decodeJWT
@@ -40,6 +41,7 @@ import sys
 import redis
 
 router_stocks = APIRouter()
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
