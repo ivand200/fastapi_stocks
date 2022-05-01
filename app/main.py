@@ -1,7 +1,3 @@
-# TODO: implement to use Redis to save users and especially admin(check for auth)
-# TODO: implement to use Celery to update etf, index (once a month)
-# TODO: revise paths
-# TODO: implement Admin model
 import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -34,8 +30,9 @@ from passlib.context import CryptContext
 from database import models, schemas
 from .defs import Momentum, DivP
 from database.db import get_db, engine
-from app.routers import app
-from fastapi import Depends, HTTPException, Security, Header, Response
+
+# from app.routers import app
+from fastapi import APIRouter, Depends, HTTPException, Security, Header, Response
 from app.auth import decodeJWT
 
 import csv
@@ -43,6 +40,7 @@ import logging
 import sys
 import redis
 
+router_stocks = APIRouter()
 
 
 logger = logging.getLogger()
@@ -67,7 +65,7 @@ r = redis.Redis(
 scheduler = BackgroundScheduler()
 
 
-@app.get("/stocks/{ticker}", response_model=schemas.StockBase, status_code=200)
+@router_stocks.get("/dj30/{ticker}", response_model=schemas.StockBase, status_code=200)
 def get_stock(
     ticker: str,
     db: Session = Depends(get_db),
@@ -80,7 +78,10 @@ def get_stock(
         raise HTTPException(status_code=401, detail="Acces denied")
     else:
         db_stock = (
-            db.query(models.Stock).filter(models.Stock.ticker == ticker).first()
+            db.query(models.Stock)
+            .join(models.Index)
+            .filter(models.Index.id == 1, models.Stock.ticker == ticker)
+            .first()
         )
         if db_stock is None:
             raise HTTPException(status_code=404, detail="Stock not found")
@@ -94,7 +95,7 @@ def get_stock(
         return stock
 
 
-@app.get("/index/{index}", response_model=schemas.IndexDataBase, status_code=200)
+@router_stocks.get("/index/{index}", response_model=schemas.IndexDataBase, status_code=200)
 def best_stocks(
     index: str,
     response_model = schemas.IndexDataBase,
@@ -131,45 +132,59 @@ def best_stocks(
     # return stock_serializer
 
 
-@app.put("/index/{index}", status_code=200)
+@router_stocks.put("/index/dj30", status_code=200)
 async def update_index(
-    index: str, 
+    stock: schemas.StockBase, 
     db: Session = Depends(get_db), 
     Authorization: Optional[str] = Header(None),
 ):
     """
-    Update stocks by index
+    Stocks updates
     momentum_avg
     div_p
     """
     if not decodeJWT(Authorization):
         raise HTTPException(status_code=401, detail="Acces denied")
     else:
-        index_db = (
-            db.query(models.Index).filter(models.Index.ticker == index).first()
+        stock_db = (
+            db.query(models.Stock)
+            .join(models.Index)
+            .filter(models.Index.id == 1, models.Stock.ticker == stock.ticker)
+            .first()
         )
-        stocks_db = (
-            db.query(models.Stock).filter(models.Stock.index_id == index_db.id).all()
-        )
-        for stock in stocks_db:
-            momentum_avg = Momentum.get_momentum_avg(stock.ticker)
-            div_p = DivP.get_div_p(stock.ticker)
-            stock.momentum_avg = momentum_avg
-            stock.div_p = div_p
-            logger.info(f"Update stock: {stock.ticker}")
+        stock_db.momentum_avg = stock.momentum_avg
+        stock_db.div_p = stock.div_p
+        logger.info(f"Update stock: {stock.ticker}")
+        db.commit()
+        db.refresh(stock_db)
+        return JSONResponse(f"{stock} was updated")
 
-            redis_data = {
-                "ticker": stock.ticker,
-                "Momentum_avg": stock.momentum_avg,
-                "Div_p": stock.div_p
-            }
-            r.set(stock.ticker, json.dumps(redis_data))
-            db.commit()
-            db.refresh(stock)
-        return JSONResponse({"status": "ok"})
+
+      # index_db = (
+      #     db.query(models.Index).filter(models.Index.ticker == index).first()
+      # )
+      # stocks_db = (
+      #     db.query(models.Stock).filter(models.Stock.index_id == index_db.id).all()
+      # )
+      # for stock in stocks_db:
+      #     momentum_avg = Momentum.get_momentum_avg(stock.ticker)
+      #     div_p = DivP.get_div_p(stock.ticker)
+      #     stock.momentum_avg = momentum_avg
+      #     stock.div_p = div_p
+      #     logger.info(f"Update stock: {stock.ticker}")
+#
+      #     redis_data = {
+      #         "ticker": stock.ticker,
+      #         "Momentum_avg": stock.momentum_avg,
+      #         "Div_p": stock.div_p
+      #     }
+      #     r.set(stock.ticker, json.dumps(redis_data))
+      #     db.commit()
+      #     db.refresh(stock)
+      # return JSONResponse({"status": "ok"})
 
       
-@app.delete("/index/{index}", status_code=200)
+@router_stocks.delete("/index/{index}", status_code=200)
 def delete_index(
     index: str,
     db: Session = Depends(get_db),
@@ -198,7 +213,7 @@ def delete_index(
     #     return JSONResponse(f"all stocks from index {index} was deleted")
 
 
-@app.post("/index/{index}", status_code=201)
+@router_stocks.post("/index/{index}", status_code=201)
 async def populate_index(
     index: str,
     db: Session = Depends(get_db),
