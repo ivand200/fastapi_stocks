@@ -1,4 +1,4 @@
-from app import main
+from app import routers
 from fastapi.testclient import TestClient
 from database import models
 from passlib.context import CryptContext
@@ -10,7 +10,7 @@ import pytest
 import json
 
 
-client = TestClient(main.app)
+client = TestClient(routers.app)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -80,11 +80,11 @@ def test_auth_app():
 def test_get_token():
     TOKEN = get_token()
     
-    response_ticker_token = client.get("/stocks/AAPL", headers={"Authorization": TOKEN})
-    response_ticker_bad_token = client.get("/stocks/AAPL", headers={"Authorization": "123fttt"})
+    response_ticker_token = client.get("/stocks/dj30/AAPL", headers={"Authorization": TOKEN})
+    response_ticker_bad_token = client.get("/stocks/dj30/AAPL", headers={"Authorization": "123fttt"})
 
-    response_index_token = client.get("/index/dj30", headers={"Authorization": TOKEN})
-    response_index_bad_token = client.get("/index/dj30")
+    response_index_token = client.get("/stocks/index/dj30", headers={"Authorization": TOKEN})
+    response_index_bad_token = client.get("/stocks/index/dj30")
 
     assert response_ticker_token.status_code == 200
     assert response_ticker_token.json()["ticker"] == "AAPL"

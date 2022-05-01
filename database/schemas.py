@@ -23,8 +23,8 @@ class UserInDB(UserBase):
 class StockBase(BaseModel):
     name: str
     ticker: str
-    momentum_avg: float
-    div_p: float = None
+    momentum_avg: Optional[float]
+    div_p: Optional[float] = None
 
     class Config:
         orm_mode = True
